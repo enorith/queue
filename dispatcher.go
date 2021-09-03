@@ -9,13 +9,13 @@ import (
 var DefaultDispatcher Dispatcher
 
 type Dispatcher struct {
-	on string
+	DefaultConnection string
 }
 
 func (d Dispatcher) Dispatch(payload interface{}) error {
 	ph := &PayloadHolder{
 		payload: payload,
-		on:      d.on,
+		on:      d.DefaultConnection,
 	}
 
 	return ph.Dispatch()
@@ -32,7 +32,7 @@ func (d Dispatcher) On(on string) *PayloadHolder {
 func (d Dispatcher) After(delay time.Duration) *PayloadHolder {
 	ph := &PayloadHolder{
 		delay: delay,
-		on:    d.on,
+		on:    d.DefaultConnection,
 	}
 
 	return ph
