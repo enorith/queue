@@ -13,19 +13,6 @@ type ConnectionRegister func(config map[string]interface{}) contracts.Connection
 
 var DefaultManager = NewManager()
 
-type WorkerConfig struct {
-	Connection  string `yaml:"connection"`
-	Concurrency int    `yaml:"concurrency"`
-}
-
-type Config struct {
-	Listening      bool                              `yaml:"listen"`
-	Connection     string                            `yaml:"connection" env:"QUEUE_CONNECTION" default:"mem"`
-	RunningWorkers []string                          `yaml:"running_workers"`
-	Workers        map[string]WorkerConfig           `yaml:"workers"`
-	Connections    map[string]map[string]interface{} `yaml:"connections"`
-}
-
 type Manager struct {
 	connectionRegisters map[string]ConnectionRegister
 	connections         map[string]contracts.Connection
