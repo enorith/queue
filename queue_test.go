@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/enorith/queue"
+	"github.com/enorith/queue/connections"
+	"github.com/enorith/queue/contracts"
 	"github.com/enorith/queue/std"
 )
 
@@ -68,13 +70,19 @@ func Test_Mem(t *testing.T) {
 	}
 }
 func init() {
-	queue.WithDefaults()
-	c, _ := queue.DefaultManager.ResolveConnection("nsq", map[string]interface{}{
-		"nsqd": "127.0.0.1:49157",
+	queue.DefaultManager.RegisterConnection("nsq", func() (contracts.Connection, error) {
+		return connections.NewNsqFromConfig(connections.NsqConfig{
+			Nsqd: "127.0.0.1:49157",
+		}), nil
 	})
+	queue.DefaultManager.RegisterConnection("mem", func() (contracts.Connection, error) {
+		return connections.NewMem(), nil
+	})
+
+	c, _ := queue.DefaultManager.GetConnection("nsq")
 	queue.DefaultManager.RegisterWorker("nsq", std.NewWorker(4, c))
 
-	c2, _ := queue.DefaultManager.ResolveConnection("mem", nil)
+	c2, _ := queue.DefaultManager.GetConnection("mem")
 
 	queue.DefaultManager.RegisterWorker("mem", std.NewWorker(4, c2))
 

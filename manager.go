@@ -5,11 +5,10 @@ import (
 	"log"
 	"sync"
 
-	"github.com/enorith/queue/connections"
 	"github.com/enorith/queue/contracts"
 )
 
-type ConnectionRegister func(config map[string]interface{}) contracts.Connection
+type ConnectionRegister func() (contracts.Connection, error)
 
 var DefaultManager = NewManager()
 
@@ -20,6 +19,7 @@ type Manager struct {
 	m                   sync.RWMutex
 }
 
+//Work, run worker process
 func (m *Manager) Work(done chan struct{}, workers ...string) {
 	lenWorkers := len(workers)
 	close := make(chan struct{}, lenWorkers)
@@ -61,35 +61,29 @@ func (m *Manager) Close(workers ...string) {
 	}
 }
 
-func (m *Manager) ResolveConnection(connection string, config map[string]interface{}) (contracts.Connection, error) {
+//GetConnection, get queue connection
+func (m *Manager) GetConnection(connection string) (contracts.Connection, error) {
 	m.m.RLock()
 	if con, ok := m.connections[connection]; ok {
 		m.m.RUnlock()
 		return con, nil
 	}
-
 	cr, ok := m.connectionRegisters[connection]
 	m.m.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("[queue] unregisterd connection [%s]", connection)
 	}
-	c := cr(config)
+	c, e := cr()
+	if e != nil {
+		return c, e
+	}
 	m.m.Lock()
 	m.connections[connection] = c
 	m.m.Unlock()
 	return c, nil
 }
 
-func (m *Manager) GetConnection(con string) (contracts.Connection, error) {
-	m.m.RLock()
-	defer m.m.RUnlock()
-	if con, ok := m.connections[con]; ok {
-		return con, nil
-	}
-
-	return nil, fmt.Errorf("[queue] unresolved connection [%s]", con)
-}
-
+//GetWorker, get queue worker
 func (m *Manager) GetWorker(worker string) (contracts.Worker, bool) {
 	m.m.RLock()
 	defer m.m.RUnlock()
@@ -99,6 +93,7 @@ func (m *Manager) GetWorker(worker string) (contracts.Worker, bool) {
 	return w, ok
 }
 
+//RegisterWorker, register queue worker
 func (m *Manager) RegisterWorker(name string, worker contracts.Worker) {
 	m.m.Lock()
 	defer m.m.Unlock()
@@ -106,6 +101,7 @@ func (m *Manager) RegisterWorker(name string, worker contracts.Worker) {
 	m.workers[name] = worker
 }
 
+//RegisterConnection, register queue connection
 func (m *Manager) RegisterConnection(connection string, cr ConnectionRegister) {
 	m.m.Lock()
 	defer m.m.Unlock()
@@ -119,14 +115,4 @@ func NewManager() *Manager {
 		connections:         make(map[string]contracts.Connection),
 		m:                   sync.RWMutex{},
 	}
-}
-
-func WithDefaults() {
-	DefaultManager.RegisterConnection("nsq", func(config map[string]interface{}) contracts.Connection {
-		return connections.NewNsq(config)
-	})
-
-	DefaultManager.RegisterConnection("mem", func(config map[string]interface{}) contracts.Connection {
-		return connections.NewMem()
-	})
 }

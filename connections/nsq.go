@@ -36,10 +36,11 @@ func (n *Nsq) Consume(concurrency int, exit chan struct{}) (err error) {
 	}
 
 	if config.UsingLookup {
-		return n.consumer.ConnectToNSQLookupd(config.Lookupd)
+		err = n.consumer.ConnectToNSQLookupd(config.Lookupd)
+	} else {
+		err = n.consumer.ConnectToNSQD(config.Nsqd)
 	}
 
-	err = n.consumer.ConnectToNSQD(config.Nsqd)
 	if err != nil {
 		return
 	}
@@ -148,6 +149,17 @@ func NewNsq(config map[string]interface{}) *Nsq {
 
 func NewNsqFromConfig(conf NsqConfig) *Nsq {
 	conf.valid = true
+	if conf.Topic == "" {
+		conf.Topic = "default"
+	}
+
+	if conf.Channel == "" {
+		conf.Channel = "default"
+	}
+	if conf.Lookupd != "" {
+		conf.UsingLookup = true
+	}
+
 	return &Nsq{
 		configVal: conf,
 	}
