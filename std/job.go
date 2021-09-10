@@ -18,7 +18,7 @@ var (
 	mu       sync.RWMutex
 )
 
-func AddHandler(job interface{}, fn interface{}) {
+func Listen(job interface{}, fn interface{}) {
 	mu.Lock()
 	defer mu.Unlock()
 	name := reflection.TypeString(job)

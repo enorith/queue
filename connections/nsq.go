@@ -8,16 +8,17 @@ import (
 	"github.com/nsqio/go-nsq"
 )
 
-type Config struct {
+type NsqConfig struct {
 	Lookupd, Nsqd, Topic, Channel string
 	UsingLookup, valid            bool
 }
 
 type Nsq struct {
 	config    map[string]interface{}
-	configVal Config
+	configVal NsqConfig
 	consumer  *nsq.Consumer
 	producer  *nsq.Producer
+	handler   nsq.Handler
 }
 
 func (n *Nsq) Consume(concurrency int, exit chan struct{}) (err error) {
@@ -27,10 +28,11 @@ func (n *Nsq) Consume(concurrency int, exit chan struct{}) (err error) {
 	if err != nil {
 		return err
 	}
+	h := n.getHandler()
 	if concurrency > 1 {
-		n.consumer.AddHandler(std.JobHandler{})
+		n.consumer.AddHandler(h)
 	} else {
-		n.consumer.AddConcurrentHandlers(std.JobHandler{}, concurrency)
+		n.consumer.AddConcurrentHandlers(h, concurrency)
 	}
 
 	if config.UsingLookup {
@@ -43,6 +45,18 @@ func (n *Nsq) Consume(concurrency int, exit chan struct{}) (err error) {
 	}
 	<-exit
 	return
+}
+
+func (n *Nsq) getHandler() nsq.Handler {
+	if n.handler == nil {
+		n.handler = std.JobHandler{}
+	}
+	return n.handler
+}
+
+func (n *Nsq) SetHandler(h nsq.Handler) *Nsq {
+	n.handler = h
+	return n
 }
 
 func (n *Nsq) Stop() error {
@@ -75,7 +89,6 @@ func (n *Nsq) Dispatch(payload interface{}, delay ...time.Duration) (err error) 
 	}
 
 	if len(delay) == 0 || delay[0] == 0 {
-
 		err = n.producer.Publish(config.Topic, messageBody)
 	} else {
 		err = n.producer.DeferredPublish(config.Topic, delay[0], messageBody)
@@ -84,7 +97,7 @@ func (n *Nsq) Dispatch(payload interface{}, delay ...time.Duration) (err error) 
 	return
 }
 
-func (n *Nsq) parseConfig() (c Config, e error) {
+func (n *Nsq) parseConfig() (c NsqConfig, e error) {
 	if n.configVal.valid {
 		return n.configVal, nil
 	}
@@ -128,4 +141,10 @@ func NewNsq(config map[string]interface{}) *Nsq {
 	nsq := &Nsq{config: config}
 	nsq.parseConfig()
 	return nsq
+}
+
+func NewNsqFromConfig(conf NsqConfig) *Nsq {
+	return &Nsq{
+		configVal: conf,
+	}
 }

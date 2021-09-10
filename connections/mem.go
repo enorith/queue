@@ -19,10 +19,33 @@ type Mem struct {
 }
 
 func (m *Mem) Consume(concurrency int, exit chan struct{}) error {
+	done := make(chan struct{}, concurrency)
+
+	for i := 0; i < concurrency; i++ {
+		go m.memLoop(done)
+	}
+	breakLoop := func() {
+		for i := 0; i < concurrency; i++ {
+			done <- struct{}{}
+		}
+	}
 	for {
 		select {
 		case <-exit:
+			breakLoop()
 			return nil
+		case <-m.stopChan:
+			breakLoop()
+			return nil
+		}
+	}
+}
+
+func (m *Mem) memLoop(exit chan struct{}) {
+	for {
+		select {
+		case <-exit:
+			return
 		case job := <-m.queue:
 			go func() {
 				if job.delay > 0 {
@@ -30,8 +53,6 @@ func (m *Mem) Consume(concurrency int, exit chan struct{}) error {
 				}
 				std.InvokeHandler(job.payload)
 			}()
-		case <-m.stopChan:
-			return nil
 		}
 	}
 }
