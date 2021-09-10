@@ -1,6 +1,7 @@
 package connections
 
 import (
+	"errors"
 	"time"
 
 	"github.com/enorith/queue/std"
@@ -16,6 +17,7 @@ type memJob struct {
 type Mem struct {
 	queue    chan memJob
 	stopChan chan struct{}
+	running  bool
 }
 
 func (m *Mem) Consume(concurrency int, exit chan struct{}) error {
@@ -28,7 +30,9 @@ func (m *Mem) Consume(concurrency int, exit chan struct{}) error {
 		for i := 0; i < concurrency; i++ {
 			done <- struct{}{}
 		}
+		m.running = false
 	}
+	m.running = true
 	for {
 		select {
 		case <-exit:
@@ -58,15 +62,22 @@ func (m *Mem) memLoop(exit chan struct{}) {
 }
 
 func (m *Mem) Stop() error {
-	m.stopChan <- struct{}{}
+	if m.running {
+		m.stopChan <- struct{}{}
+	}
 	return nil
 }
 
 func (m *Mem) Dispatch(payload interface{}, delay ...time.Duration) error {
+	if !m.running {
+		return errors.New("memory queue consumer not running")
+	}
+
 	var d time.Duration
 	if len(delay) > 0 {
 		d = delay[0]
 	}
+
 	m.queue <- memJob{
 		delay:   d,
 		serveAt: time.Now().Add(d),
@@ -77,7 +88,7 @@ func (m *Mem) Dispatch(payload interface{}, delay ...time.Duration) error {
 
 func NewMem() *Mem {
 	return &Mem{
-		queue:    make(chan memJob),
+		queue:    make(chan memJob, 20),
 		stopChan: make(chan struct{}, 1),
 	}
 }

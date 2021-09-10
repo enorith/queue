@@ -76,10 +76,13 @@ func (n *Nsq) Stop() error {
 func (n *Nsq) Dispatch(payload interface{}, delay ...time.Duration) (err error) {
 	c := nsq.NewConfig()
 	config := n.configVal
-	n.producer, err = nsq.NewProducer(config.Nsqd, c)
-	if err != nil {
-		return
+	if n.producer == nil {
+		n.producer, err = nsq.NewProducer(config.Nsqd, c)
+		if err != nil {
+			return
+		}
 	}
+
 	n.producer.SetLogger(nil, 0)
 	var messageBody []byte
 	messageBody, err = std.MarshalPayload(payload)
@@ -144,6 +147,7 @@ func NewNsq(config map[string]interface{}) *Nsq {
 }
 
 func NewNsqFromConfig(conf NsqConfig) *Nsq {
+	conf.valid = true
 	return &Nsq{
 		configVal: conf,
 	}
