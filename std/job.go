@@ -18,6 +18,15 @@ var (
 	mu       sync.RWMutex
 )
 
+var Invoker = func(payloadType reflect.Type, payloadValue, funcValue reflect.Value, funcType reflect.Type) {
+
+	if payloadType.Kind() == reflect.Ptr {
+		funcValue.Call([]reflect.Value{payloadValue})
+	} else {
+		funcValue.Call([]reflect.Value{reflect.Indirect(payloadValue)})
+	}
+}
+
 func Listen(job interface{}, fn interface{}) {
 	mu.Lock()
 	defer mu.Unlock()
@@ -58,7 +67,7 @@ func (j Job) Invoke() (e error) {
 	if t.Kind() != reflect.Func {
 		return fmt.Errorf("[queue] job invoke only accept a func parameter, %T giving", fn)
 	}
-	if t.NumIn() != 1 {
+	if t.NumIn() < 1 {
 		return fmt.Errorf("[queue] job invoke handler should contain one param of payload")
 	}
 	ti := t.In(0)
@@ -67,12 +76,7 @@ func (j Job) Invoke() (e error) {
 	msgpack.Unmarshal(j.Payload, iv.Interface())
 
 	fv := reflect.ValueOf(fn)
-
-	if ti.Kind() == reflect.Ptr {
-		fv.Call([]reflect.Value{iv})
-	} else {
-		fv.Call([]reflect.Value{reflect.Indirect(iv)})
-	}
+	Invoker(ti, iv, fv, t)
 
 	return nil
 }
@@ -144,7 +148,7 @@ func InvokeHandler(payload interface{}) (e error) {
 	if t.Kind() != reflect.Func {
 		return fmt.Errorf("[queue] job invoke only accept a func parameter, %T giving", fn)
 	}
-	if t.NumIn() != 1 {
+	if t.NumIn() < 1 {
 		return fmt.Errorf("[queue] job invoke handler should contain one param of payload")
 	}
 	ti := t.In(0)
@@ -153,11 +157,7 @@ func InvokeHandler(payload interface{}) (e error) {
 
 	fv := reflect.ValueOf(fn)
 
-	if ti.Kind() == reflect.Ptr {
-		fv.Call([]reflect.Value{iv})
-	} else {
-		fv.Call([]reflect.Value{reflect.Indirect(iv)})
-	}
+	Invoker(ti, iv, fv, t)
 
 	return nil
 }
