@@ -72,7 +72,7 @@ func Test_Mem(t *testing.T) {
 func init() {
 	queue.DefaultManager.RegisterConnection("nsq", func() (contracts.Connection, error) {
 		return connections.NewNsqFromConfig(connections.NsqConfig{
-			Nsqd: "127.0.0.1:49157",
+			Nsqd: "127.0.0.1:4150",
 		}), nil
 	})
 	queue.DefaultManager.RegisterConnection("mem", func() (contracts.Connection, error) {

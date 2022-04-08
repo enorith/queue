@@ -2,11 +2,14 @@ package connections
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/enorith/queue/std"
 	"github.com/nsqio/go-nsq"
 )
+
+const AddrStep = ","
 
 type NsqConfig struct {
 	Lookupd, Nsqd, Topic, Channel string
@@ -36,9 +39,9 @@ func (n *Nsq) Consume(concurrency int, exit chan struct{}) (err error) {
 	}
 
 	if config.UsingLookup {
-		err = n.consumer.ConnectToNSQLookupd(config.Lookupd)
+		err = n.consumer.ConnectToNSQLookupds(strings.Split(config.Lookupd, AddrStep))
 	} else {
-		err = n.consumer.ConnectToNSQD(config.Nsqd)
+		err = n.consumer.ConnectToNSQDs(strings.Split(config.Nsqd, AddrStep))
 	}
 
 	if err != nil {
