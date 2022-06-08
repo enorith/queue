@@ -33,9 +33,9 @@ func (n *Nsq) Consume(concurrency int, exit chan struct{}) (err error) {
 	}
 	h := n.getHandler()
 	if concurrency > 1 {
-		n.consumer.AddHandler(h)
-	} else {
 		n.consumer.AddConcurrentHandlers(h, concurrency)
+	} else {
+		n.consumer.AddHandler(h)
 	}
 
 	if config.UsingLookup {
