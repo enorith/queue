@@ -13,10 +13,12 @@ import (
 	"github.com/enorith/queue/connections"
 	"github.com/enorith/queue/contracts"
 	"github.com/enorith/queue/std"
+	"github.com/nsqio/go-nsq"
 )
 
 type Payload struct {
-	Foo string
+	*nsq.Message `msgpack:"-"`
+	Foo          string
 }
 
 type MemPayload struct {

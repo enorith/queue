@@ -18,6 +18,10 @@ var (
 	mu       sync.RWMutex
 )
 
+var (
+	messageType = reflect.TypeOf(&nsq.Message{})
+)
+
 var Invoker = func(payloadType reflect.Type, payloadValue, funcValue reflect.Value, funcType reflect.Type) {
 
 	if payloadType.Kind() == reflect.Ptr {
@@ -47,7 +51,7 @@ type Job struct {
 	Payload     []byte
 }
 
-func (j Job) Invoke() (e error) {
+func (j Job) Invoke(msg *nsq.Message) (e error) {
 	defer func() {
 		if x := recover(); x != nil {
 			if err, ok := x.(error); ok {
@@ -70,13 +74,20 @@ func (j Job) Invoke() (e error) {
 	if t.NumIn() < 1 {
 		return fmt.Errorf("[queue] job invoke handler should contain one param of payload")
 	}
-	ti := t.In(0)
-	iv := reflect.New(ti)
+	pt := t.In(0)
+	pv := reflect.New(pt)
 
-	msgpack.Unmarshal(j.Payload, iv.Interface())
+	e = msgpack.Unmarshal(j.Payload, pv.Interface())
+	if e != nil {
+		return
+	}
+	midx := reflection.SubStructOf(pt, messageType)
+	if midx > -1 {
+		reflect.Indirect(pv).Field(midx).Set(reflect.ValueOf(msg))
+	}
 
 	fv := reflect.ValueOf(fn)
-	Invoker(ti, iv, fv, t)
+	Invoker(pt, pv, fv, t)
 
 	return nil
 }
@@ -108,8 +119,13 @@ func (JobHandler) HandleMessage(m *nsq.Message) error {
 	}
 	var job Job
 
-	msgpack.Unmarshal(m.Body, &job)
-	e := job.Invoke()
+	e := msgpack.Unmarshal(m.Body, &job)
+	if e != nil {
+		log.Printf("[queue] parse job error %v", e)
+		log.Print(e)
+	}
+
+	e = job.Invoke(m)
 	if e != nil {
 		log.Printf("[queue] job %s handle error", job.PayloadType)
 		log.Print(e)
