@@ -47,11 +47,12 @@ func GetHandler(name string) (interface{}, bool) {
 }
 
 type Job struct {
+	ID          string
 	PayloadType string
 	Payload     []byte
 }
 
-func (j Job) Invoke(msg *nsq.Message) (e error) {
+func (j Job) Invoke(before ...func(payloadType reflect.Type, payloadValue reflect.Value)) (e error) {
 	defer func() {
 		if x := recover(); x != nil {
 			if err, ok := x.(error); ok {
@@ -81,9 +82,9 @@ func (j Job) Invoke(msg *nsq.Message) (e error) {
 	if e != nil {
 		return
 	}
-	midx := reflection.SubStructOf(pt, messageType)
-	if midx > -1 {
-		reflect.Indirect(pv).Field(midx).Set(reflect.ValueOf(msg))
+
+	for _, bf := range before {
+		bf(pt, pv)
 	}
 
 	fv := reflect.ValueOf(fn)
@@ -110,10 +111,10 @@ func MarshalPayload(payload interface{}) ([]byte, error) {
 	return msgpack.Marshal(j)
 }
 
-type JobHandler struct {
+type NsqHandler struct {
 }
 
-func (JobHandler) HandleMessage(m *nsq.Message) error {
+func (NsqHandler) HandleMessage(m *nsq.Message) error {
 	if len(m.Body) == 0 {
 		return nil
 	}
@@ -125,7 +126,12 @@ func (JobHandler) HandleMessage(m *nsq.Message) error {
 		log.Print(e)
 	}
 
-	e = job.Invoke(m)
+	e = job.Invoke(func(pt reflect.Type, pv reflect.Value) {
+		midx := reflection.SubStructOf(pt, messageType)
+		if midx > -1 {
+			reflect.Indirect(pv).Field(midx).Set(reflect.ValueOf(m))
+		}
+	})
 	if e != nil {
 		log.Printf("[queue] job %s handle error", job.PayloadType)
 		log.Print(e)

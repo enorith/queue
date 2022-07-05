@@ -53,7 +53,7 @@ func (n *Nsq) Consume(concurrency int, exit chan struct{}) (err error) {
 
 func (n *Nsq) getHandler() nsq.Handler {
 	if n.handler == nil {
-		n.handler = std.JobHandler{}
+		n.handler = std.NsqHandler{}
 	}
 	return n.handler
 }
