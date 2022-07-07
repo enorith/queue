@@ -9,6 +9,7 @@ import (
 
 	"github.com/enorith/queue/contracts"
 	"github.com/enorith/supports/reflection"
+	"github.com/enorith/supports/str"
 	"github.com/nsqio/go-nsq"
 	"github.com/vmihailenco/msgpack/v5"
 )
@@ -95,6 +96,7 @@ func (j Job) Invoke(before ...func(payloadType reflect.Type, payloadValue reflec
 
 func ToJob(payload interface{}) (j Job, e error) {
 	j.PayloadType = GetPayloadName(payload)
+	j.ID = str.RandString(64)
 
 	j.Payload, e = msgpack.Marshal(payload)
 
