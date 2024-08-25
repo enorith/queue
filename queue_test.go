@@ -90,20 +90,20 @@ func Test_Mem(t *testing.T) {
 		queue.DefaultManager.Work(done, "mem")
 		wg.Done()
 	}()
-	ticker := time.NewTicker(time.Millisecond * 100)
-	i := 0
-	for {
-		select {
-		case <-ticker.C:
-			queue.DefaultDispatcher.On("mem").Dispatch(MemPayload{
-				Bar: fmt.Sprintf("[%d] time %s", i, time.Now().Format(TF)),
-			})
-			i++
-		case <-exit:
-			done <- struct{}{}
-			return
-		}
+
+	time.Sleep(time.Second)
+	count := 20
+	for i := 0; i < count; {
+		bar := fmt.Sprintf("[%d] time %s", i, time.Now().Format(TF))
+		queue.DefaultDispatcher.On("mem").After(time.Second).Dispatch(MemPayload{
+			Bar: bar,
+		})
+		i++
 	}
+	fmt.Println("watting...")
+	<-exit
+	done <- struct{}{}
+	wg.Wait()
 }
 func init() {
 	queue.DefaultManager.RegisterConnection("nsq", func() (contracts.Connection, error) {
@@ -127,10 +127,10 @@ func init() {
 
 	c2, _ := queue.DefaultManager.GetConnection("mem")
 
-	queue.DefaultManager.RegisterWorker("mem", std.NewWorker(4, c2))
+	queue.DefaultManager.RegisterWorker("mem", std.NewWorker(10, c2))
 
 	c3, _ := queue.DefaultManager.GetConnection("redis")
-	queue.DefaultManager.RegisterWorker("redis", std.NewWorker(4, c3))
+	queue.DefaultManager.RegisterWorker("redis", std.NewWorker(3, c3))
 
 	std.Listen(Payload{}, func(p Payload) {
 		fmt.Println("nsq payload", p.ID)
@@ -143,6 +143,6 @@ func init() {
 	})
 
 	std.Listen(RedisPayload{}, func(r RedisPayload) {
-		fmt.Println("redis payload", r.Message)
+		fmt.Printf("redis payload %s, %s \n", r.Message, time.Now().Format(TF))
 	})
 }

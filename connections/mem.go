@@ -4,59 +4,61 @@ import (
 	"errors"
 	"time"
 
+	"github.com/alitto/pond"
 	"github.com/enorith/queue/std"
 )
 
 type memJob struct {
-	delay   time.Duration
-	serveAt time.Time
-	payload interface{}
+	delay    time.Duration
+	serveAt  time.Time
+	payload  interface{}
+	served   bool
+	servedAt time.Time
 }
 
-//Mem, in-memory queue, only works on single machine
+var (
+	DefaultMemBuffer = 1024
+)
+
+// Mem, in-memory queue, only works on single machine
 type Mem struct {
-	queue    chan memJob
-	stopChan chan struct{}
-	running  bool
+	delayJobs []*memJob
+	stopChan  chan struct{}
+	running   bool
+	pool      *pond.WorkerPool
 }
 
 func (m *Mem) Consume(concurrency int, exit chan struct{}) error {
-	done := make(chan struct{}, concurrency)
+	if !m.running {
+		m.pool = pond.New(concurrency, DefaultMemBuffer)
 
-	for i := 0; i < concurrency; i++ {
-		go m.memLoop(done)
+		m.running = true
 	}
-	breakLoop := func() {
-		for i := 0; i < concurrency; i++ {
-			done <- struct{}{}
-		}
-		m.running = false
-	}
-	m.running = true
-	for {
-		select {
-		case <-exit:
-			breakLoop()
-			return nil
-		case <-m.stopChan:
-			breakLoop()
-			return nil
-		}
-	}
+
+	go m.listenDelayJobs()
+
+	<-exit
+	m.pool.StopAndWait()
+	return nil
 }
 
-func (m *Mem) memLoop(exit chan struct{}) {
+func (m *Mem) listenDelayJobs() {
+	ticker := time.NewTicker(time.Second)
 	for {
 		select {
-		case <-exit:
+		case <-m.stopChan:
 			return
-		case job := <-m.queue:
-			go func() {
-				if job.delay > 0 {
-					<-time.After(job.delay)
+		case <-ticker.C:
+			for _, job := range m.delayJobs {
+				if time.Now().After(job.serveAt) && !job.served {
+					job.serveAt = time.Now()
+					job.served = true
+					j := job
+					m.pool.Submit(func() {
+						std.InvokeHandler(j.payload)
+					})
 				}
-				std.InvokeHandler(job.payload)
-			}()
+			}
 		}
 	}
 }
@@ -72,23 +74,30 @@ func (m *Mem) Dispatch(payload interface{}, delay ...time.Duration) error {
 	if !m.running {
 		return errors.New("memory queue consumer not running")
 	}
-
 	var d time.Duration
 	if len(delay) > 0 {
 		d = delay[0]
 	}
 
-	m.queue <- memJob{
-		delay:   d,
-		serveAt: time.Now().Add(d),
-		payload: payload,
+	if d > 0 {
+		m.delayJobs = append(m.delayJobs, &memJob{
+			delay:   d,
+			serveAt: time.Now().Add(d),
+			payload: payload,
+		})
+	} else {
+		m.pool.Submit(func() {
+
+			std.InvokeHandler(payload)
+		})
 	}
+
 	return nil
 }
 
 func NewMem() *Mem {
 	return &Mem{
-		queue:    make(chan memJob, 20),
-		stopChan: make(chan struct{}, 1),
+		delayJobs: make([]*memJob, 0),
+		stopChan:  make(chan struct{}, 1),
 	}
 }
