@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/alitto/pond"
+	"github.com/enorith/queue/contracts"
 	"github.com/enorith/queue/std"
 )
 
@@ -22,16 +23,25 @@ var (
 
 // Mem, in-memory queue, only works on single machine
 type Mem struct {
-	delayJobs []*memJob
-	stopChan  chan struct{}
-	running   bool
-	pool      *pond.WorkerPool
+	delayJobs    []*memJob
+	stopChan     chan struct{}
+	running      bool
+	pool         *pond.WorkerPool
+	errorHandler contracts.ErrorHandler
 }
 
-func (m *Mem) Consume(concurrency int, exit chan struct{}) error {
+func CallErrorHandler(e error, handler contracts.ErrorHandler) error {
+	if e != nil && handler != nil {
+		handler(e)
+	}
+
+	return e
+}
+
+func (m *Mem) Consume(concurrency int, exit chan struct{}, handler contracts.ErrorHandler) error {
 	if !m.running {
 		m.pool = pond.New(concurrency, DefaultMemBuffer)
-
+		m.errorHandler = handler
 		m.running = true
 	}
 
@@ -51,11 +61,11 @@ func (m *Mem) listenDelayJobs() {
 		case <-ticker.C:
 			for _, job := range m.delayJobs {
 				if time.Now().After(job.serveAt) && !job.served {
-					job.serveAt = time.Now()
+					job.servedAt = time.Now()
 					job.served = true
 					j := job
 					m.pool.Submit(func() {
-						std.InvokeHandler(j.payload)
+						CallErrorHandler(std.InvokeHandler(j.payload), m.errorHandler)
 					})
 				}
 			}
@@ -87,8 +97,7 @@ func (m *Mem) Dispatch(payload interface{}, delay ...time.Duration) error {
 		})
 	} else {
 		m.pool.Submit(func() {
-
-			std.InvokeHandler(payload)
+			CallErrorHandler(std.InvokeHandler(payload), m.errorHandler)
 		})
 	}
 

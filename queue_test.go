@@ -121,6 +121,9 @@ func init() {
 			DB:    2,
 		}), "queue:default"), nil
 	})
+	queue.DefaultManager.ErrorHandler = func(err error) {
+		fmt.Println(err, "ERROR !!!!!")
+	}
 
 	c, _ := queue.DefaultManager.GetConnection("nsq")
 	queue.DefaultManager.RegisterWorker("nsq", std.NewWorker(4, c))
@@ -130,7 +133,7 @@ func init() {
 	queue.DefaultManager.RegisterWorker("mem", std.NewWorker(10, c2))
 
 	c3, _ := queue.DefaultManager.GetConnection("redis")
-	queue.DefaultManager.RegisterWorker("redis", std.NewWorker(3, c3))
+	queue.DefaultManager.RegisterWorker("redis", std.NewWorker(2, c3))
 
 	std.Listen(Payload{}, func(p Payload) {
 		fmt.Println("nsq payload", p.ID)
@@ -142,7 +145,12 @@ func init() {
 		fmt.Printf("%s payload: %s \n", time.Now().Format(TF), p.Bar)
 	})
 
-	std.Listen(RedisPayload{}, func(r RedisPayload) {
+	std.Listen(RedisPayload{}, func(r RedisPayload) error {
 		fmt.Printf("redis payload %s, %s \n", r.Message, time.Now().Format(TF))
+		if time.Now().Unix()%3 == 0 {
+			return fmt.Errorf("error %s", r.Message)
+		}
+
+		return nil
 	})
 }

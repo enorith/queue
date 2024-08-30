@@ -9,8 +9,8 @@ type Worker struct {
 	concurrency int
 }
 
-func (w *Worker) Run(done chan struct{}) error {
-	return w.connection.Consume(w.concurrency, done)
+func (w *Worker) Run(done chan struct{}, handler contracts.ErrorHandler) error {
+	return w.connection.Consume(w.concurrency, done, handler)
 }
 
 func (w *Worker) Close() error {

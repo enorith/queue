@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/enorith/queue/contracts"
 	"github.com/enorith/queue/std"
 	"github.com/nsqio/go-nsq"
 )
@@ -24,7 +25,14 @@ type Nsq struct {
 	handler   nsq.Handler
 }
 
-func (n *Nsq) Consume(concurrency int, exit chan struct{}) (err error) {
+type WrapperHandler struct {
+	Handler func(message *nsq.Message) error
+}
+
+func (wh WrapperHandler) HandleMessage(message *nsq.Message) error {
+	return wh.Handler(message)
+}
+func (n *Nsq) Consume(concurrency int, exit chan struct{}, handler contracts.ErrorHandler) (err error) {
 	c := nsq.NewConfig()
 	config := n.configVal
 	n.consumer, err = nsq.NewConsumer(config.Topic, config.Channel, c)
@@ -32,10 +40,16 @@ func (n *Nsq) Consume(concurrency int, exit chan struct{}) (err error) {
 		return err
 	}
 	h := n.getHandler()
+	ha := WrapperHandler{
+		Handler: func(message *nsq.Message) error {
+			return CallErrorHandler(h.HandleMessage(message), handler)
+		},
+	}
+
 	if concurrency > 1 {
-		n.consumer.AddConcurrentHandlers(h, concurrency)
+		n.consumer.AddConcurrentHandlers(ha, concurrency)
 	} else {
-		n.consumer.AddHandler(h)
+		n.consumer.AddHandler(ha)
 	}
 
 	if config.UsingLookup {

@@ -23,13 +23,22 @@ var (
 	messageType = reflect.TypeOf(&nsq.Message{})
 )
 
-var Invoker = func(payloadType reflect.Type, payloadValue, funcValue reflect.Value, funcType reflect.Type) {
+var Invoker = func(payloadType reflect.Type, payloadValue, funcValue reflect.Value, funcType reflect.Type) error {
 
+	var result []reflect.Value
 	if payloadType.Kind() == reflect.Ptr {
-		funcValue.Call([]reflect.Value{payloadValue})
+		result = funcValue.Call([]reflect.Value{payloadValue})
 	} else {
-		funcValue.Call([]reflect.Value{reflect.Indirect(payloadValue)})
+		result = funcValue.Call([]reflect.Value{reflect.Indirect(payloadValue)})
 	}
+	if len(result) > 0 {
+		intf := result[0].Interface()
+		if e, ok := intf.(error); ok {
+			return e
+		}
+	}
+
+	return nil
 }
 
 func Listen(job interface{}, fn interface{}) {
@@ -89,9 +98,8 @@ func (j Job) Invoke(before ...func(payloadType reflect.Type, payloadValue reflec
 	}
 
 	fv := reflect.ValueOf(fn)
-	Invoker(pt, pv, fv, t)
 
-	return nil
+	return Invoker(pt, pv, fv, t)
 }
 
 func ToJob(payload interface{}) (j Job, e error) {
