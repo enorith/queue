@@ -13,8 +13,8 @@ import (
 	"github.com/enorith/queue/connections"
 	"github.com/enorith/queue/contracts"
 	"github.com/enorith/queue/std"
-	"github.com/go-redis/redis/v8"
 	"github.com/nsqio/go-nsq"
+	"github.com/redis/go-redis/v9"
 )
 
 type Payload struct {

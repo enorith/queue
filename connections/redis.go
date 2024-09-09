@@ -9,7 +9,7 @@ import (
 	"github.com/alitto/pond"
 	"github.com/enorith/queue/contracts"
 	"github.com/enorith/queue/std"
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 	"github.com/vmihailenco/msgpack/v5"
 )
 
@@ -47,7 +47,7 @@ func (r *Redis) Dispatch(payload interface{}, delay ...time.Duration) error {
 
 	ms := time.Now().Add(delay[0]).UnixMilli()
 
-	r.rdb.ZAdd(context.Background(), r.queue, &redis.Z{
+	r.rdb.ZAdd(context.Background(), r.queue, redis.Z{
 		Score:  float64(ms),
 		Member: messageBody,
 	})
